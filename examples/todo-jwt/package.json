@@ -45,6 +45,7 @@
     "@loopback/repository": "^2.3.0",
     "@loopback/rest": "^3.3.2",
     "@loopback/rest-explorer": "^2.1.2",
+    "@loopback/security": "^0.2.8",
     "@loopback/service-proxy": "^2.1.2",
     "bcryptjs": "^2.4.3",
     "loopback-connector-rest": "^3.6.0",
