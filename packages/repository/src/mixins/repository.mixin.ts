@@ -189,7 +189,9 @@ export function RepositoryMixin<T extends MixinTarget<Application>>(
       nameOrOptions?: string | BindingFromClassOptions,
     ) {
       const binding = super.component(componentCtor, nameOrOptions);
-      this.mountComponentRepositories(componentCtor);
+      const instance = this.getComponentInstance(componentCtor);
+      this.mountComponentRepositories(instance);
+      this.mountComponentModels(instance);
       return binding;
     }
 
@@ -200,17 +202,34 @@ export function RepositoryMixin<T extends MixinTarget<Application>>(
      *
      * @param component - The component to mount repositories of
      */
-    mountComponentRepositories(component: Class<unknown>) {
-      const componentKey = `${CoreBindings.COMPONENTS}.${component.name}`;
-      const compInstance = this.getSync<{
-        repositories?: Class<Repository<Model>>[];
-      }>(componentKey);
+    mountComponentRepositories(
+      component: Class<unknown> | {repositories?: Class<Repository<Model>>[]},
+    ) {
+      // accept also component class to preserve backwards compatibility
+      const compInstance =
+        typeof component === 'function'
+          ? this.getComponentInstance<{
+              repositories?: Class<Repository<Model>>[];
+            }>(component)
+          : component;
 
       if (compInstance.repositories) {
         for (const repo of compInstance.repositories) {
           this.repository(repo);
         }
       }
+    }
+
+    mountComponentModels(component: {models?: Class<Model>[]}) {
+      if (!component.models) return;
+      for (const m of component.models) {
+        this.model(m);
+      }
+    }
+
+    getComponentInstance<T extends object>(component: Class<unknown>) {
+      const componentKey = `${CoreBindings.COMPONENTS}.${component.name}`;
+      return this.getSync<T>(componentKey);
     }
 
     /**
