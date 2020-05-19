@@ -189,7 +189,7 @@ export function RepositoryMixin<T extends MixinTarget<Application>>(
       nameOrOptions?: string | BindingFromClassOptions,
     ) {
       const binding = super.component(componentCtor, nameOrOptions);
-      const instance = this.getComponentInstance(componentCtor);
+      const instance = this.getSync<C & RepositoryComponent>(binding.key);
       this.mountComponentRepositories(instance);
       this.mountComponentModels(instance);
       return binding;
@@ -198,38 +198,50 @@ export function RepositoryMixin<T extends MixinTarget<Application>>(
     /**
      * Get an instance of a component and mount all it's
      * repositories. This function is intended to be used internally
-     * by component()
+     * by `component()`.
      *
-     * @param component - The component to mount repositories of
+     * NOTE: Calling `mountComponentRepositories` with a component class
+     * constructor is deprecated. You should instantiate the component
+     * yourself and provide the component instance instead.
+     *
+     * @param componentInstanceOrClass - The component to mount repositories of
+     * @internal
      */
     mountComponentRepositories(
-      component: Class<unknown> | {repositories?: Class<Repository<Model>>[]},
-    ) {
       // accept also component class to preserve backwards compatibility
-      const compInstance =
-        typeof component === 'function'
-          ? this.getComponentInstance<{
-              repositories?: Class<Repository<Model>>[];
-            }>(component)
-          : component;
+      // TODO(semver-major) Remove support for component class constructor
+      componentInstanceOrClass: Class<unknown> | RepositoryComponent,
+    ) {
+      const component = resolveComponentInstance(this);
 
-      if (compInstance.repositories) {
-        for (const repo of compInstance.repositories) {
+      if (component.repositories) {
+        for (const repo of component.repositories) {
           this.repository(repo);
         }
       }
+
+      // `Readonly<Application>` is a hack to remove protected members
+      // and thus allow `this` to be passed as a value for `ctx`
+      function resolveComponentInstance(ctx: Readonly<Application>) {
+        if (typeof componentInstanceOrClass !== 'function')
+          return componentInstanceOrClass;
+
+        const componentName = componentInstanceOrClass.name;
+        const componentKey = `${CoreBindings.COMPONENTS}.${componentName}`;
+        return ctx.getSync<RepositoryComponent>(componentKey);
+      }
     }
 
-    mountComponentModels(component: {models?: Class<Model>[]}) {
+    /**
+     * Bind all model classes provided by a component.
+     * @param component
+     * @internal
+     */
+    mountComponentModels(component: RepositoryComponent) {
       if (!component.models) return;
       for (const m of component.models) {
         this.model(m);
       }
-    }
-
-    getComponentInstance<T extends object>(component: Class<unknown>) {
-      const componentKey = `${CoreBindings.COMPONENTS}.${component.name}`;
-      return this.getSync<T>(componentKey);
     }
 
     /**
@@ -272,6 +284,24 @@ export function RepositoryMixin<T extends MixinTarget<Application>>(
       }
     }
   };
+}
+
+/**
+ * This interface describes additional Component properties
+ * allowing components to contribute Repository-related artifacts.
+ */
+export interface RepositoryComponent {
+  /**
+   * An optional list of Repository classes to bind for dependency injection
+   * via `app.repository()` API.
+   */
+  repositories?: Class<Repository<Model>>[];
+
+  /**
+   * An optional list of Model classes to bind for dependency injection
+   * via `app.model()` API.
+   */
+  models?: Class<Model>[];
 }
 
 /**
